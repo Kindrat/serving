@@ -479,7 +479,7 @@ namespace tensorflow {
       return config;
     }
 
-    Status ServerCore::AddModelConfigEntry(const ModelConfig& entry) {
+    Status ServerCore::AddModelConfigEntry(const ModelConfig &entry) {
       mutex_lock l(config_mu_);
       for (const auto &model : config_.model_config_list().config()) {
         if (model.name() == entry.name()) {
@@ -489,7 +489,9 @@ namespace tensorflow {
           return errors::AlreadyExists("There is existing deployed model with path : ", entry.base_path());
         }
       }
-      config_.mutable_model_config_list()->mutable_config()->Add(const_cast<ModelConfig &&>(entry));
+      ModelConfig *added_config = config_.mutable_model_config_list()->add_config();
+      added_config->MergeFrom(entry);
+
       TF_RETURN_IF_ERROR(MaybeUpdateServerRequestLogger(config_.config_case()));
 
       if (options_.flush_filesystem_caches) {
@@ -522,11 +524,32 @@ namespace tensorflow {
       for (int i = 0; i < config_.model_config_list().config_size(); ++i) {
         ModelConfig *modelConfig = config_.mutable_model_config_list()->mutable_config()->Mutable(i);
         if (modelConfig->name() == model_name) {
-          modelConfig->name() = entry.name();
-          modelConfig->base_path() = entry.base_path();
-          modelConfig->model_version_policy() = entry.model_version_policy();
-          modelConfig->model_platform() = entry.model_platform();
-          modelConfig->logging_config() = entry.logging_config();
+          FileSystemStoragePathSourceConfig_ServableVersionPolicy version_policy = entry.model_version_policy();
+          if (version_policy.has_all()) {
+            modelConfig->mutable_model_version_policy()->mutable_all()->MergeFrom(version_policy.all());
+          } else if (version_policy.has_latest()) {
+            modelConfig->mutable_model_version_policy()->mutable_latest()->MergeFrom(version_policy.latest());
+          } else if (version_policy.has_specific()) {
+            modelConfig->mutable_model_version_policy()->mutable_specific()->MergeFrom(version_policy.specific());
+          } else {
+            return errors::InvalidArgument("Invalid version policy : ", version_policy.DebugString());
+          }
+
+          if (entry.has_logging_config()) {
+            LoggingConfig logging_config = entry.logging_config();
+            if (logging_config.has_log_collector_config()) {
+              modelConfig->mutable_logging_config()->mutable_log_collector_config()
+                  ->MergeFrom(logging_config.log_collector_config());
+            }
+            if (logging_config.has_sampling_config()) {
+              modelConfig->mutable_logging_config()->mutable_sampling_config()
+                  ->MergeFrom(logging_config.sampling_config());
+            }
+          }
+
+          modelConfig->set_name(entry.name());
+          modelConfig->set_base_path(entry.base_path());
+          modelConfig->set_model_platform(entry.model_platform());
 
           TF_RETURN_IF_ERROR(MaybeUpdateServerRequestLogger(config_.config_case()));
 
@@ -753,6 +776,6 @@ namespace tensorflow {
       }
       return Status::OK();
     }
-    
+
   }  //  namespace serving
 }  //  namespace tensorflow
