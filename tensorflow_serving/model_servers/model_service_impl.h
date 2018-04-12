@@ -43,6 +43,18 @@ namespace tensorflow {
                                             const GetConfigRequest *request,
                                             GetConfigResponse *response);
 
+      ::grpc::Status HandleAddModelRequest(::grpc::ServerContext *context,
+                                           const AddModelRequest *request,
+                                           AddModelResponse *response);
+
+      ::grpc::Status HandleRemoveModelRequest(::grpc::ServerContext *context,
+                                              const RemoveModelRequest *request,
+                                              RemoveModelResponse *response);
+
+      ::grpc::Status HandleUpdateModelConfigRequest(::grpc::ServerContext *context,
+                                                    const UpdateModelConfigRequest *request,
+                                                    UpdateModelConfigResponse *response);
+
     private:
       ServerCore *core_;
     };

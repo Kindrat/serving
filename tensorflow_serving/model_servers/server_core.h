@@ -180,6 +180,18 @@ class ServerCore : public Manager {
   virtual ModelServerConfig GetConfig()
       LOCKS_EXCLUDED(config_mu_);
 
+  /// Adds new model source to existing config list
+  virtual Status AddModelConfigEntry(const ModelConfig& entry)
+      LOCKS_EXCLUDED(config_mu_);
+
+  /// Remove existing model source from config list
+  virtual Status RemoveModelConfigEntry(string model_name)
+      LOCKS_EXCLUDED(config_mu_);
+
+  /// Remove existing model source from config list
+  virtual Status UpdateModelConfig(string model_name, const ModelConfig& entry)
+      LOCKS_EXCLUDED(config_mu_);
+
   /// Returns ServableStateMonitor that can be used to query servable states.
   virtual ServableStateMonitor* servable_state_monitor() const {
     return servable_state_monitor_.get();

@@ -54,7 +54,8 @@ namespace tensorflow {
           break;
         }
         default:
-          status = errors::InvalidArgument("ServerModelConfig type not supported by HandleReloadConfigRequest. Only ModelConfigList is currently supported");
+          status = errors::InvalidArgument(
+              "ServerModelConfig type not supported by HandleReloadConfigRequest. Only ModelConfigList is currently supported");
       }
 
       if (!status.ok()) {
@@ -72,6 +73,33 @@ namespace tensorflow {
       ModelServerConfig config = core_->GetConfig();
       *response->mutable_config() = config;
       return ToGRPCStatus(Status::OK());
+    }
+
+    ::grpc::Status ModelServiceImpl::HandleAddModelRequest(::grpc::ServerContext *context,
+                                                           const AddModelRequest *request,
+                                                           AddModelResponse *response) {
+      const Status status = core_->AddModelConfigEntry(request->config());
+      const StatusProto status_proto = ToStatusProto(status);
+      *response->mutable_status() = status_proto;
+      return ToGRPCStatus(status);
+    }
+
+    ::grpc::Status ModelServiceImpl::HandleRemoveModelRequest(::grpc::ServerContext *context,
+                                                              const RemoveModelRequest *request,
+                                                              RemoveModelResponse *response) {
+      const Status status = core_->RemoveModelConfigEntry(request->model_name());
+      const StatusProto status_proto = ToStatusProto(status);
+      *response->mutable_status() = status_proto;
+      return ToGRPCStatus(status);
+    }
+
+    ::grpc::Status ModelServiceImpl::HandleUpdateModelConfigRequest(::grpc::ServerContext *context,
+                                                                    const UpdateModelConfigRequest *request,
+                                                                    UpdateModelConfigResponse *response) {
+      const Status status = core_->UpdateModelConfig(request->model_name(), request->config());
+      const StatusProto status_proto = ToStatusProto(status);
+      *response->mutable_status() = status_proto;
+      return ToGRPCStatus(status);
     }
   }  // namespace serving
 }  // namespace tensorflow
