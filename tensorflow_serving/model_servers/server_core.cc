@@ -413,8 +413,7 @@ namespace tensorflow {
       mutex_lock l(config_mu_);
 
       // Determine whether to accept this config transition.
-      const bool is_first_config =
-          config_.config_case() == ModelServerConfig::CONFIG_NOT_SET;
+      const bool is_first_config = config_.config_case() == ModelServerConfig::CONFIG_NOT_SET;
       const bool accept_transition =
           is_first_config ||
           (config_.config_case() == ModelServerConfig::kModelConfigList &&
@@ -431,8 +430,7 @@ namespace tensorflow {
         return Status::OK();
       }
       if (new_config.config_case() == ModelServerConfig::kModelConfigList) {
-        TF_RETURN_IF_ERROR(
-            ValidateModelConfigList(new_config.model_config_list(), options_));
+        TF_RETURN_IF_ERROR(ValidateModelConfigList(new_config.model_config_list(), options_));
       }
       if (new_config.config_case() == ModelServerConfig::kModelConfigList &&
           config_.config_case() == ModelServerConfig::kModelConfigList) {
@@ -441,13 +439,16 @@ namespace tensorflow {
       }
       config_ = new_config;
 
+      return RefreshConfig(is_first_config);
+    }
+
+    Status ServerCore::RefreshConfig(const bool is_first_config) {
       LOG(INFO) << "Adding/updating models.";
       switch (config_.config_case()) {
         case ModelServerConfig::kModelConfigList: {
           if (options_.model_config_list_root_dir) {
-            TF_RETURN_IF_ERROR(UpdateModelConfigListRelativePaths(
-                *options_.model_config_list_root_dir,
-                config_.mutable_model_config_list()));
+            TF_RETURN_IF_ERROR(UpdateModelConfigListRelativePaths(*options_.model_config_list_root_dir,
+                                                                  config_.mutable_model_config_list()));
           }
           TF_RETURN_IF_ERROR(AddModelsViaModelConfigList());
           break;
@@ -481,6 +482,7 @@ namespace tensorflow {
 
     Status ServerCore::AddModelConfigEntry(const ModelConfig &entry) {
       mutex_lock l(config_mu_);
+      const bool is_first_config = config_.config_case() == ModelServerConfig::CONFIG_NOT_SET;
       for (const auto &model : config_.model_config_list().config()) {
         if (model.name() == entry.name()) {
           return errors::AlreadyExists("There is existing deployed model with name : ", entry.name());
@@ -489,31 +491,26 @@ namespace tensorflow {
           return errors::AlreadyExists("There is existing deployed model with path : ", entry.base_path());
         }
       }
+
+
       ModelConfig *added_config = config_.mutable_model_config_list()->add_config();
       added_config->MergeFrom(entry);
 
-      TF_RETURN_IF_ERROR(MaybeUpdateServerRequestLogger(config_.config_case()));
-
-      if (options_.flush_filesystem_caches) {
-        return Env::Default()->FlushFileSystemCaches();
-      }
-      return Status::OK();
+      return RefreshConfig(is_first_config);
     }
 
     Status ServerCore::RemoveModelConfigEntry(string model_name) {
       mutex_lock l(config_mu_);
+      const bool is_first_config = config_.config_case() == ModelServerConfig::CONFIG_NOT_SET;
+      if (is_first_config) {
+        return errors::FailedPrecondition("No model for name :", model_name);
+      }
 
       for (int i = 0; i < config_.model_config_list().config_size(); ++i) {
         const ModelConfig &modelConfig = config_.model_config_list().config(i);
         if (modelConfig.name() == model_name) {
           config_.mutable_model_config_list()->mutable_config()->DeleteSubrange(i, 1);
-
-          TF_RETURN_IF_ERROR(MaybeUpdateServerRequestLogger(config_.config_case()));
-
-          if (options_.flush_filesystem_caches) {
-            return Env::Default()->FlushFileSystemCaches();
-          }
-          return Status::OK();
+          return RefreshConfig(is_first_config);
         }
       }
       return errors::FailedPrecondition("No model for name :", model_name);
@@ -521,6 +518,11 @@ namespace tensorflow {
 
     Status ServerCore::UpdateModelConfig(string model_name, const ModelConfig &entry) {
       mutex_lock l(config_mu_);
+      const bool is_first_config = config_.config_case() == ModelServerConfig::CONFIG_NOT_SET;
+      if (is_first_config) {
+        return errors::FailedPrecondition("No model for name :", model_name);
+      }
+
       for (int i = 0; i < config_.model_config_list().config_size(); ++i) {
         ModelConfig *modelConfig = config_.mutable_model_config_list()->mutable_config()->Mutable(i);
         if (modelConfig->name() == model_name) {
@@ -550,13 +552,7 @@ namespace tensorflow {
           modelConfig->set_name(entry.name());
           modelConfig->set_base_path(entry.base_path());
           modelConfig->set_model_platform(entry.model_platform());
-
-          TF_RETURN_IF_ERROR(MaybeUpdateServerRequestLogger(config_.config_case()));
-
-          if (options_.flush_filesystem_caches) {
-            return Env::Default()->FlushFileSystemCaches();
-          }
-          return Status::OK();
+          return RefreshConfig(is_first_config);
         }
       }
       return errors::FailedPrecondition("No model for name :", entry.name(), entry.base_path());

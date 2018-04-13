@@ -323,7 +323,7 @@ Status FileSystemStoragePathSource::UpdateConfig(
 
   if (fs_polling_thread_ != nullptr &&
       config.file_system_poll_wait_seconds() !=
-          config_.file_system_poll_wait_seconds()) {
+      config_.file_system_poll_wait_seconds()) {
     return errors::InvalidArgument(
         "Changing file_system_poll_wait_seconds is not supported");
   }
